@@ -41,7 +41,7 @@ function corpClientNormalizePhone(string $phone): string
     }
 
     if ($digits[0] === '8') {
-        $digits[0] = '7';
+        $digits = substr_replace($digits, '7', 0, 1);
     }
 
     if ($digits[0] !== '7') {
@@ -111,7 +111,6 @@ $sourceTitle = trim((string)($_POST['source_title'] ?? 'Стать клиент�
 $sourcePage = trim((string)($_POST['source_page'] ?? '/for-corporations/'));
 
 $name = strip_tags($name);
-$email = filter_var($email, FILTER_SANITIZE_EMAIL);
 $sourceTitle = mb_substr(strip_tags($sourceTitle), 0, 255);
 $sourcePage = mb_substr(strip_tags($sourcePage), 0, 255);
 $normalizedPhone = corpClientNormalizePhone($phone);
@@ -146,6 +145,10 @@ if ($consent !== 'Y') {
 
 $config = corpClientLoadConfig();
 $captchaSecret = trim((string)($config['SMARTCAPTCHA_SECRET_KEY'] ?? ''));
+$iblockId = (int)($config['IBLOCK_ID'] ?? 22);
+if ($iblockId <= 0) {
+    $iblockId = 22;
+}
 
 if (!corpClientVerifyCaptcha($captchaToken, $captchaSecret)) {
     corpClientJsonResponse([
@@ -163,10 +166,11 @@ if (!\CModule::IncludeModule('iblock')) {
 
 $elementName = $sourceTitle !== '' ? $sourceTitle : 'Заявка корпоративного клиента';
 $elementName .= ' — '.$name;
+$elementName = mb_substr($elementName, 0, 255);
 
 $el = new \CIBlockElement();
 $elementId = $el->Add([
-    'IBLOCK_ID' => 22,
+    'IBLOCK_ID' => $iblockId,
     'ACTIVE' => 'Y',
     'NAME' => $elementName,
     'PREVIEW_TEXT' => "Имя: {$name}\nТелефон: {$normalizedPhone}\nEmail: {$email}\nСтраница: {$sourcePage}",

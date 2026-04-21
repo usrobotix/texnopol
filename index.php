@@ -12,6 +12,7 @@ if (file_exists($corpClientFormConfigPath)) {
 }
 
 $smartCaptchaSiteKey = (string)($corpClientFormConfig["SMARTCAPTCHA_SITE_KEY"] ?? "");
+$isSmartCaptchaEnabled = $smartCaptchaSiteKey !== "" && $smartCaptchaSiteKey !== "SMARTCAPTCHA_SITE_KEY";
 ?>
 
 <div class="page-wrapper"> <!-- Родительский блок для стилизации -->
@@ -7420,7 +7421,15 @@ document.addEventListener('DOMContentLoaded', function () {
   var tokenInput = form.querySelector('input[name="smartcaptcha_token"]');
   var captchaContainer = document.getElementById('corp-client-smartcaptcha');
   var smartCaptchaWidgetId = null;
-  var smartCaptchaSiteKey = <?= \CUtil::PhpToJSObject($smartCaptchaSiteKey); ?>;
+  var smartCaptchaSiteKey = <?= json_encode($smartCaptchaSiteKey, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+  var smartCaptchaEnabled = <?= $isSmartCaptchaEnabled ? 'true' : 'false'; ?>;
+
+  function resetCaptcha() {
+    if (smartCaptchaWidgetId !== null && window.smartCaptcha) {
+      window.smartCaptcha.reset(smartCaptchaWidgetId);
+      tokenInput.value = '';
+    }
+  }
 
   function clearError() {
     errorBlock.textContent = '';
@@ -7475,10 +7484,6 @@ document.addEventListener('DOMContentLoaded', function () {
     return /^\+7 \(\d{3}\) \d{3}-\d{2}-\d{2}$/.test(value);
   }
 
-  function isValidEmail(value) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-  }
-
   phoneInput.addEventListener('input', function () {
     phoneInput.value = formatPhone(phoneInput.value);
   });
@@ -7492,7 +7497,7 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   emailInput.addEventListener('blur', function () {
-    if (emailInput.value && !isValidEmail(emailInput.value)) {
+    if (emailInput.value && !emailInput.checkValidity()) {
       emailInput.setCustomValidity('Укажите корректный email');
     } else {
       emailInput.setCustomValidity('');
@@ -7500,7 +7505,7 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   function initSmartCaptcha() {
-    if (!captchaContainer || !window.smartCaptcha || !smartCaptchaSiteKey || smartCaptchaSiteKey === 'SMARTCAPTCHA_SITE_KEY') {
+    if (!captchaContainer || !window.smartCaptcha || !smartCaptchaEnabled || !smartCaptchaSiteKey) {
       return;
     }
     smartCaptchaWidgetId = window.smartCaptcha.render(captchaContainer, {
@@ -7531,6 +7536,11 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
 
+    if (!smartCaptchaEnabled) {
+      showError('Капча временно недоступна. Обратитесь к администратору сайта.');
+      return;
+    }
+
     if (!tokenInput.value) {
       showError('Подтвердите, что вы не робот.');
       return;
@@ -7553,6 +7563,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (result && result.success) {
           form.classList.add('is-success');
           clearError();
+          resetCaptcha();
           return;
         }
 
@@ -7562,10 +7573,7 @@ document.addEventListener('DOMContentLoaded', function () {
           showError('Не удалось отправить заявку. Попробуйте ещё раз.');
         }
 
-        if (smartCaptchaWidgetId !== null && window.smartCaptcha) {
-          window.smartCaptcha.reset(smartCaptchaWidgetId);
-          tokenInput.value = '';
-        }
+        resetCaptcha();
       })
       .catch(function () {
         showError('Не удалось отправить заявку. Попробуйте ещё раз.');
