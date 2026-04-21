@@ -62,7 +62,7 @@ $APPLICATION->SetTitle("Корпоративным клиентам");
                     <input type="hidden" name="source_title" value="Стать клиентом">
                     <input type="hidden" name="source_page" value="/for-corporations/">
                     <div class="corp-client-honeypot" aria-hidden="true">
-                        <input type="text" name="honeypot" tabindex="-1" autocomplete="off">
+                        <input type="text" name="honeypot" tabindex="-1" autocomplete="off" aria-hidden="true">
                     </div>
                     <!-- кнопка -->
                     <button type="submit">Отправить заявку</button>
@@ -84,6 +84,10 @@ $APPLICATION->SetTitle("Корпоративным клиентам");
 .corp-client-honeypot {
   position: absolute;
   clip: rect(0, 0, 0, 0);
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  white-space: nowrap;
 }
     :root {
   --primary-color: #ffe63f;
