@@ -83,7 +83,8 @@ $APPLICATION->SetTitle("Корпоративным клиентам");
 <style>
 .corp-client-honeypot {
   position: absolute;
-  clip: rect(0, 0, 0, 0);
+  left: -10000px;
+  top: auto;
   width: 1px;
   height: 1px;
   overflow: hidden;

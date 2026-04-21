@@ -55,38 +55,6 @@ function corpClientNormalizePhone(string $phone): string
     return '+7 ('.substr($digits, 1, 3).') '.substr($digits, 4, 3).'-'.substr($digits, 7, 2).'-'.substr($digits, 9, 2);
 }
 
-function corpClientRateLimitSessionKey(): string
-{
-    $ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
-    return 'corp_client_last_submit_'.preg_replace('/[^a-zA-Z0-9]/', '_', $ip);
-}
-
-function corpClientIsRateLimited(int $minInterval = 10): bool
-{
-    if (!isset($_SESSION) || !is_array($_SESSION)) {
-        return false;
-    }
-
-    $sessionKey = corpClientRateLimitSessionKey();
-    $currentTime = time();
-    $lastSubmitTime = (int)($_SESSION[$sessionKey] ?? 0);
-
-    if ($lastSubmitTime > 0 && ($currentTime - $lastSubmitTime) < $minInterval) {
-        return true;
-    }
-
-    return false;
-}
-
-function corpClientMarkRateLimitSubmission(): void
-{
-    if (!isset($_SESSION) || !is_array($_SESSION)) {
-        return;
-    }
-
-    $_SESSION[corpClientRateLimitSessionKey()] = time();
-}
-
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     corpClientJsonResponse([
         'success' => false,
@@ -149,18 +117,6 @@ if ($consent !== 'Y') {
 }
 
 $config = corpClientLoadConfig();
-$rateLimitSeconds = (int)($config['RATE_LIMIT_SECONDS'] ?? 10);
-if ($rateLimitSeconds < 0) {
-    $rateLimitSeconds = 0;
-}
-
-if ($rateLimitSeconds > 0 && corpClientIsRateLimited($rateLimitSeconds)) {
-    corpClientJsonResponse([
-        'success' => false,
-        'error' => 'Слишком много попыток отправки. Попробуйте через несколько секунд.',
-    ]);
-}
-
 $iblockId = (int)($config['IBLOCK_ID'] ?? 22);
 if ($iblockId <= 0) {
     $iblockId = 22;
@@ -235,8 +191,6 @@ if (!$ownerMailSent || !$userMailSent) {
         'error' => 'Заявка сохранена, но не удалось отправить email. Пожалуйста, свяжитесь с нами по телефону.',
     ]);
 }
-
-corpClientMarkRateLimitSubmission();
 
 corpClientJsonResponse([
     'success' => true,
