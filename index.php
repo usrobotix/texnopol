@@ -1,6 +1,17 @@
 <?php
 require($_SERVER["DOCUMENT_ROOT"]."/bitrix/header.php");
 $APPLICATION->SetTitle("Корпоративным клиентам");
+
+$corpClientFormConfig = [];
+$corpClientFormConfigPath = $_SERVER["DOCUMENT_ROOT"]."/local/php_interface/corp_client_form.php";
+if (file_exists($corpClientFormConfigPath)) {
+    $loadedCorpClientFormConfig = include $corpClientFormConfigPath;
+    if (is_array($loadedCorpClientFormConfig)) {
+        $corpClientFormConfig = $loadedCorpClientFormConfig;
+    }
+}
+
+$smartCaptchaSiteKey = (string)($corpClientFormConfig["SMARTCAPTCHA_SITE_KEY"] ?? "");
 ?>
 
 <div class="page-wrapper"> <!-- Родительский блок для стилизации -->
@@ -43,31 +54,41 @@ $APPLICATION->SetTitle("Корпоративным клиентам");
             <div class="feedback-card" >
                 <div style="font-weight:600; font-size:30px; line-height:34px; margin-bottom:12px;">Стать клиентом</div>
                 <div style="margin-bottom:24px;">Отправьте заявку и мы свяжемся с вами в ближайшее время</div>
-                <form class="feedback-card-form" method="POST" action="/api/v1/form/save">
-                    <input type="hidden" name="sessid" value="cfffeea1157e1b69b90fe68658e66973">
-                    <input type="hidden" name="WEB_FORM_ID" value="2">
+                <form class="feedback-card-form js-corp-client-form" method="POST" action="/local/ajax/corp_client.php">
+                    <?=bitrix_sessid_post();?>
+                    <div class="js-corp-client-fields">
                     <div style="margin-bottom:16px;">
                         <label style="display:block; margin-bottom:4px;">Имя</label>
-                        <input type="text" name="form_text_5" required style="width:100%; padding:10px; border-radius:8px; border:1px solid #ccc;">
+                        <input type="text" name="name" required maxlength="255" style="width:100%; padding:10px; border-radius:8px; border:1px solid #ccc;">
                     </div>
                     <div style="margin-bottom:16px;">
                         <label style="display:block; margin-bottom:4px;">Номер телефона</label>
-                        <input type="tel" name="form_text_6" required data-imask="+{7} (000) 000-00-00" style="width:100%; padding:10px; border-radius:8px; border:1px solid #ccc;">
+                        <input type="tel" name="phone" required inputmode="tel" placeholder="+7 (___) ___-__-__" autocomplete="tel" style="width:100%; padding:10px; border-radius:8px; border:1px solid #ccc;">
+                    </div>
+                    <div style="margin-bottom:16px;">
+                        <label style="display:block; margin-bottom:4px;">Email</label>
+                        <input type="email" name="email" required inputmode="email" placeholder="example@mail.ru" autocomplete="email" style="width:100%; padding:10px; border-radius:8px; border:1px solid #ccc;">
                     </div>
                     <!-- скрытые поля -->
-                    <input type="hidden" name="form_hidden_7" value="Москва">
-                    <input type="hidden" name="form_hidden_8" value="Стать клиентом">
-                    <input type="hidden" name="form_hidden_9" value="/for-corporations/">
-                    <input type="hidden" name="form_hidden_48" value="">
+                    <input type="hidden" name="source_title" value="Стать клиентом">
+                    <input type="hidden" name="source_page" value="/for-corporations/">
                     <!-- honeypot -->
                     <input type="text" name="honeypot" style="display:none;">
-                    <input type="hidden" name="FORM_LOAD_TIME" value="1776770511">
+                    <div class="feedback-card-form__captcha" style="margin-bottom:16px;">
+                        <div id="corp-client-smartcaptcha"></div>
+                        <input type="hidden" name="smartcaptcha_token" value="">
+                    </div>
                     <!-- кнопка -->
                     <button type="submit">Отправить заявку</button>
                     <!-- чекбокс -->
                     <div class="feedback-card-footer">
-                    <label class="checkbox-control"><input type="checkbox" required="" id="49" name="form_checkbox_CONFIRM[]" value="49"><span>Нажимая на кнопку «Отправить заявку», вы соглашаетесь на <a href="/local/downloads/Personal_data_protection_policy.pdf" target="_blank">обработку персональных данных</a></span> </label>
-                </div>
+                    <label class="checkbox-control"><input type="checkbox" required="" id="49" name="consent" value="Y"><span>Нажимая на кнопку «Отправить заявку», вы соглашаетесь на <a href="/local/downloads/Personal_data_protection_policy.pdf" target="_blank">обработку персональных данных</a></span> </label>
+                    </div>
+                    <div class="feedback-card-form__message js-corp-client-error" role="alert" aria-live="polite"></div>
+                    </div>
+                    <div class="feedback-card-form__success js-corp-client-success" role="status" aria-live="polite">
+                        Спасибо! Заявка успешно отправлена. Мы свяжемся с вами в ближайшее время.
+                    </div>
                 </form>
             </div>
         </div>
@@ -131,6 +152,31 @@ $APPLICATION->SetTitle("Корпоративным клиентам");
     flex-wrap:wrap;
     gap: 25px;
  }
+
+.feedback-card-form__message {
+  display: none;
+  margin-top: 12px;
+  color: var(--danger-color);
+}
+
+.feedback-card-form__message.is-visible {
+  display: block;
+}
+
+.feedback-card-form__success {
+  display: none;
+  margin-top: 16px;
+  color: var(--success-color);
+  font-weight: 600;
+}
+
+.feedback-card-form.is-success .js-corp-client-fields {
+  display: none;
+}
+
+.feedback-card-form.is-success .feedback-card-form__success {
+  display: block;
+}
 @media (min-width: 1000px) {
  .content-container .info-page-title {
     padding-right: 396px;
@@ -7359,6 +7405,177 @@ table.article-table td:last-of-type {
   padding: 16px 16px;
 }
     </style>
+<script src="https://smartcaptcha.yandexcloud.net/captcha.js" defer></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var form = document.querySelector('.js-corp-client-form');
+  if (!form) {
+    return;
+  }
+
+  var phoneInput = form.querySelector('input[name="phone"]');
+  var emailInput = form.querySelector('input[name="email"]');
+  var submitButton = form.querySelector('button[type="submit"]');
+  var errorBlock = form.querySelector('.js-corp-client-error');
+  var tokenInput = form.querySelector('input[name="smartcaptcha_token"]');
+  var captchaContainer = document.getElementById('corp-client-smartcaptcha');
+  var smartCaptchaWidgetId = null;
+  var smartCaptchaSiteKey = <?= \CUtil::PhpToJSObject($smartCaptchaSiteKey); ?>;
+
+  function clearError() {
+    errorBlock.textContent = '';
+    errorBlock.classList.remove('is-visible');
+  }
+
+  function showError(message) {
+    errorBlock.textContent = message;
+    errorBlock.classList.add('is-visible');
+  }
+
+  function normalizePhone(value) {
+    var digits = value.replace(/\D/g, '');
+    if (!digits.length) {
+      return '';
+    }
+    if (digits.charAt(0) === '8') {
+      digits = '7' + digits.slice(1);
+    }
+    if (digits.charAt(0) !== '7') {
+      digits = '7' + digits;
+    }
+    return digits.slice(0, 11);
+  }
+
+  function formatPhone(value) {
+    var digits = normalizePhone(value);
+    if (!digits) {
+      return '';
+    }
+
+    var parts = ['+7'];
+    if (digits.length > 1) {
+      parts.push(' (' + digits.slice(1, 4));
+    }
+    if (digits.length >= 4) {
+      parts[1] += ')';
+    }
+    if (digits.length > 4) {
+      parts.push(' ' + digits.slice(4, 7));
+    }
+    if (digits.length > 7) {
+      parts.push('-' + digits.slice(7, 9));
+    }
+    if (digits.length > 9) {
+      parts.push('-' + digits.slice(9, 11));
+    }
+    return parts.join('');
+  }
+
+  function isValidPhone(value) {
+    return /^\+7 \(\d{3}\) \d{3}-\d{2}-\d{2}$/.test(value);
+  }
+
+  function isValidEmail(value) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  }
+
+  phoneInput.addEventListener('input', function () {
+    phoneInput.value = formatPhone(phoneInput.value);
+  });
+
+  phoneInput.addEventListener('blur', function () {
+    if (phoneInput.value && !isValidPhone(phoneInput.value)) {
+      phoneInput.setCustomValidity('Введите телефон в формате +7 (999) 999-99-99');
+    } else {
+      phoneInput.setCustomValidity('');
+    }
+  });
+
+  emailInput.addEventListener('blur', function () {
+    if (emailInput.value && !isValidEmail(emailInput.value)) {
+      emailInput.setCustomValidity('Укажите корректный email');
+    } else {
+      emailInput.setCustomValidity('');
+    }
+  });
+
+  function initSmartCaptcha() {
+    if (!captchaContainer || !window.smartCaptcha || !smartCaptchaSiteKey || smartCaptchaSiteKey === 'SMARTCAPTCHA_SITE_KEY') {
+      return;
+    }
+    smartCaptchaWidgetId = window.smartCaptcha.render(captchaContainer, {
+      sitekey: smartCaptchaSiteKey,
+      callback: function (token) {
+        tokenInput.value = token || '';
+      },
+      'expired-callback': function () {
+        tokenInput.value = '';
+      }
+    });
+  }
+
+  if (window.smartCaptcha) {
+    initSmartCaptcha();
+  } else {
+    window.addEventListener('load', initSmartCaptcha);
+  }
+
+  form.addEventListener('submit', function (event) {
+    event.preventDefault();
+    clearError();
+
+    phoneInput.dispatchEvent(new Event('blur'));
+    emailInput.dispatchEvent(new Event('blur'));
+
+    if (!form.reportValidity()) {
+      return;
+    }
+
+    if (!tokenInput.value) {
+      showError('Подтвердите, что вы не робот.');
+      return;
+    }
+
+    submitButton.disabled = true;
+    var body = new FormData(form);
+
+    fetch(form.action, {
+      method: 'POST',
+      body: body,
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    })
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (result) {
+        if (result && result.success) {
+          form.classList.add('is-success');
+          clearError();
+          return;
+        }
+
+        if (result && result.error) {
+          showError(result.error);
+        } else {
+          showError('Не удалось отправить заявку. Попробуйте ещё раз.');
+        }
+
+        if (smartCaptchaWidgetId !== null && window.smartCaptcha) {
+          window.smartCaptcha.reset(smartCaptchaWidgetId);
+          tokenInput.value = '';
+        }
+      })
+      .catch(function () {
+        showError('Не удалось отправить заявку. Попробуйте ещё раз.');
+      })
+      .finally(function () {
+        submitButton.disabled = false;
+      });
+  });
+});
+</script>
 <?php
 require($_SERVER["DOCUMENT_ROOT"]."/bitrix/footer.php");
 ?>
