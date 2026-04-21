@@ -27,12 +27,13 @@ function corpClientGetRequestId(): string
 function corpClientRedactEmail(string $email): string
 {
     $email = trim($email);
-    if ($email === '' || strpos($email, '@') === false) {
+    $atPosition = strpos($email, '@');
+    if ($email === '' || $atPosition === false || $atPosition === 0 || $atPosition === strlen($email) - 1) {
         return '[empty]';
     }
 
     [$local, $domain] = explode('@', $email, 2);
-    $localMasked = mb_substr($local, 0, 1).str_repeat('*', max(mb_strlen($local) - 1, 1));
+    $localMasked = mb_substr($local, 0, 1).str_repeat('*', max(mb_strlen($local) - 1, 0));
 
     return $localMasked.'@'.$domain;
 }
@@ -45,7 +46,13 @@ function corpClientRedactPhone(string $phone): string
     }
 
     $last4 = substr($digits, -4);
-    return '***'.str_repeat('*', max(strlen($digits) - 4, 0)).$last4;
+    return str_repeat('*', max(strlen($digits) - 4, 0)).$last4;
+}
+
+function corpClientSafeText(string $value): string
+{
+    $cleaned = preg_replace('/[\x00-\x1F\x7F]+/', ' ', $value);
+    return trim((string)($cleaned ?? $value));
 }
 
 function corpClientLog(string $stage, array $context = []): void
@@ -56,7 +63,7 @@ function corpClientLog(string $stage, array $context = []): void
     }
 
     $logDir = $documentRoot.'/local/logs';
-    if (!is_dir($logDir) && !@mkdir($logDir, 0775, true) && !is_dir($logDir)) {
+    if (!is_dir($logDir) && !@mkdir($logDir, 0700, true) && !is_dir($logDir)) {
         return;
     }
 
@@ -70,7 +77,15 @@ function corpClientLog(string $stage, array $context = []): void
 
     $encoded = json_encode($record, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     if ($encoded === false) {
-        $encoded = '{"datetime":"'.date('c').'","request_id":"'.corpClientGetRequestId().'","stage":"'.$stage.'","context":"[encode_failed]"}';
+        $encoded = json_encode([
+            'datetime' => date('c'),
+            'request_id' => corpClientGetRequestId(),
+            'stage' => $stage,
+            'context' => '[encode_failed]',
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($encoded === false) {
+            return;
+        }
     }
 
     @file_put_contents($logFile, $encoded.PHP_EOL, FILE_APPEND | LOCK_EX);
@@ -173,9 +188,9 @@ try {
     $sourceTitle = trim((string)($_POST['source_title'] ?? 'Стать клиентом'));
     $sourcePage = trim((string)($_POST['source_page'] ?? '/for-corporations/'));
 
-    $name = strip_tags($name);
-    $sourceTitle = mb_substr(strip_tags($sourceTitle), 0, 255);
-    $sourcePage = mb_substr(strip_tags($sourcePage), 0, 255);
+    $name = corpClientSafeText(strip_tags($name));
+    $sourceTitle = mb_substr(corpClientSafeText(strip_tags($sourceTitle)), 0, 255);
+    $sourcePage = mb_substr(corpClientSafeText(strip_tags($sourcePage)), 0, 255);
     $normalizedPhone = corpClientNormalizePhone($phone);
 
     if ($name === '' || mb_strlen($name) > 255) {
@@ -184,6 +199,7 @@ try {
             'error' => 'Укажите корректное имя.',
         ]);
     }
+    $name = mb_substr($name, 0, 255);
 
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         corpClientJsonResponse([
