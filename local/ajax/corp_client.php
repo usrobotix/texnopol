@@ -55,7 +55,7 @@ function corpClientNormalizePhone(string $phone): string
     return '+7 ('.substr($digits, 1, 3).') '.substr($digits, 4, 3).'-'.substr($digits, 7, 2).'-'.substr($digits, 9, 2);
 }
 
-function corpClientIsRateLimited(): bool
+function corpClientIsRateLimited(int $minInterval = 10): bool
 {
     if (!isset($_SESSION) || !is_array($_SESSION)) {
         return false;
@@ -66,9 +66,8 @@ function corpClientIsRateLimited(): bool
         return false;
     }
 
-    $sessionKey = 'corp_client_last_submit_'.md5($ip);
+    $sessionKey = 'corp_client_last_submit_'.preg_replace('/[^a-zA-Z0-9]/', '_', $ip);
     $currentTime = time();
-    $minInterval = 10;
     $lastSubmitTime = (int)($_SESSION[$sessionKey] ?? 0);
 
     if ($lastSubmitTime > 0 && ($currentTime - $lastSubmitTime) < $minInterval) {
@@ -141,14 +140,19 @@ if ($consent !== 'Y') {
     ]);
 }
 
-if (corpClientIsRateLimited()) {
+$config = corpClientLoadConfig();
+$rateLimitSeconds = (int)($config['RATE_LIMIT_SECONDS'] ?? 10);
+if ($rateLimitSeconds < 0) {
+    $rateLimitSeconds = 0;
+}
+
+if ($rateLimitSeconds > 0 && corpClientIsRateLimited($rateLimitSeconds)) {
     corpClientJsonResponse([
         'success' => false,
         'error' => 'Слишком много попыток отправки. Попробуйте через несколько секунд.',
     ]);
 }
 
-$config = corpClientLoadConfig();
 $iblockId = (int)($config['IBLOCK_ID'] ?? 22);
 if ($iblockId <= 0) {
     $iblockId = 22;

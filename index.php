@@ -83,14 +83,7 @@ $APPLICATION->SetTitle("Корпоративным клиентам");
 <style>
 .corp-client-honeypot {
   position: absolute;
-  left: -9999px;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-}
-
-.corp-client-honeypot input {
-  opacity: 0;
+  clip: rect(0, 0, 0, 0);
 }
     :root {
   --primary-color: #ffe63f;
