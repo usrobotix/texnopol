@@ -1,18 +1,6 @@
 <?php
 require($_SERVER["DOCUMENT_ROOT"]."/bitrix/header.php");
 $APPLICATION->SetTitle("Корпоративным клиентам");
-
-$corpClientFormConfig = [];
-$corpClientFormConfigPath = $_SERVER["DOCUMENT_ROOT"]."/ajax/corp_client_form.php";
-if (file_exists($corpClientFormConfigPath)) {
-    $loadedCorpClientFormConfig = include $corpClientFormConfigPath;
-    if (is_array($loadedCorpClientFormConfig)) {
-        $corpClientFormConfig = $loadedCorpClientFormConfig;
-    }
-}
-
-$smartCaptchaSiteKey = (string)($corpClientFormConfig["SMARTCAPTCHA_SITE_KEY"] ?? "");
-$isSmartCaptchaEnabled = $smartCaptchaSiteKey !== "" && $smartCaptchaSiteKey !== "SMARTCAPTCHA_SITE_KEY";
 ?>
 
 <div class="page-wrapper"> <!-- Родительский блок для стилизации -->
@@ -73,12 +61,8 @@ $isSmartCaptchaEnabled = $smartCaptchaSiteKey !== "" && $smartCaptchaSiteKey !==
                     <!-- скрытые поля -->
                     <input type="hidden" name="source_title" value="Стать клиентом">
                     <input type="hidden" name="source_page" value="/for-corporations/">
-                    <!-- honeypot -->
-                    <input type="text" name="honeypot" style="display:none;">
-                    <div   style="height: 100px"   id="captcha-container"   class="smart-captcha"   data-sitekey="ysc1_UuA79e7Z6uQB1SNrKKEs91Kf9psr4zEmgor5RSwp6f4b781e"></div>
-                    <div class="feedback-card-form__captcha" style="margin-bottom:16px;">
-                        <div id="corp-client-smartcaptcha"></div>
-                        <input type="hidden" name="smartcaptcha_token" value="">
+                    <div class="corp-client-honeypot" aria-hidden="true">
+                        <input type="text" name="honeypot" tabindex="-1" autocomplete="off">
                     </div>
                     <!-- кнопка -->
                     <button type="submit">Отправить заявку</button>
@@ -97,16 +81,16 @@ $isSmartCaptchaEnabled = $smartCaptchaSiteKey !== "" && $smartCaptchaSiteKey !==
     </div>
 </div>
 <style>
-    /* 1) контейнер, которому скрипт ставит height:102px */
-#corp-client-smartcaptcha.smart-captcha{
-  height: auto !important;     /* игнорируем inline height */
-  min-height: 502px;           /* чтобы чекбокс не схлопывался */
+.corp-client-honeypot {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
 }
 
-/* 2) iframe чекбокса и backend – не держим в 100% от 102px */
-#corp-client-smartcaptcha.smart-captcha iframe{
-  height: 540px !important;    /* подберите: 140/150/160 */
-  max-height: none !important;
+.corp-client-honeypot input {
+  opacity: 0;
 }
     :root {
   --primary-color: #ffe63f;
@@ -7426,15 +7410,6 @@ table.article-table td:last-of-type {
   display: flex;
   flex-direction: column;
 }
-.smartcaptcha-wrap{
-  width: 100%;
-  max-width: 100%;
-  overflow: visible;
-}
-
-.smartcaptcha-wrap > *{
-  max-width: 100%;
-}
 .drawer .drawer-content.drawer-content-full-width {
   width: 100%;
 }
@@ -7452,7 +7427,6 @@ table.article-table td:last-of-type {
   padding: 16px 16px;
 }
     </style>
-<script src="https://smartcaptcha.yandexcloud.net/captcha.js" defer></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   var form = document.querySelector('.js-corp-client-form');
@@ -7464,19 +7438,6 @@ document.addEventListener('DOMContentLoaded', function () {
   var emailInput = form.querySelector('input[name="email"]');
   var submitButton = form.querySelector('button[type="submit"]');
   var errorBlock = form.querySelector('.js-corp-client-error');
-  var tokenInput = form.querySelector('input[name="smartcaptcha_token"]');
-  var captchaContainer = document.getElementById('corp-client-smartcaptcha');
-  var smartCaptchaWidgetId = null;
-  var smartCaptchaSiteKey = <?= json_encode($smartCaptchaSiteKey, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
-  var smartCaptchaEnabled = <?= $isSmartCaptchaEnabled ? 'true' : 'false'; ?>;
-
-  function resetCaptcha() {
-    if (smartCaptchaWidgetId !== null && window.smartCaptcha) {
-      window.smartCaptcha.reset(smartCaptchaWidgetId);
-      tokenInput.value = '';
-    }
-  }
-
   function clearError() {
     errorBlock.textContent = '';
     errorBlock.classList.remove('is-visible');
@@ -7550,27 +7511,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
-  function initSmartCaptcha() {
-    if (!captchaContainer || !window.smartCaptcha || !smartCaptchaEnabled || !smartCaptchaSiteKey) {
-      return;
-    }
-    smartCaptchaWidgetId = window.smartCaptcha.render(captchaContainer, {
-      sitekey: smartCaptchaSiteKey,
-      callback: function (token) {
-        tokenInput.value = token || '';
-      },
-      'expired-callback': function () {
-        tokenInput.value = '';
-      }
-    });
-  }
-
-  if (window.smartCaptcha) {
-    initSmartCaptcha();
-  } else {
-    window.addEventListener('load', initSmartCaptcha);
-  }
-
   form.addEventListener('submit', function (event) {
     event.preventDefault();
     clearError();
@@ -7579,16 +7519,6 @@ document.addEventListener('DOMContentLoaded', function () {
     emailInput.dispatchEvent(new Event('blur'));
 
     if (!form.reportValidity()) {
-      return;
-    }
-
-    if (!smartCaptchaEnabled) {
-      showError('Капча временно недоступна. Обратитесь к администратору сайта.');
-      return;
-    }
-
-    if (!tokenInput.value) {
-      showError('Подтвердите, что вы не робот.');
       return;
     }
 
@@ -7609,7 +7539,6 @@ document.addEventListener('DOMContentLoaded', function () {
         if (result && result.success) {
           form.classList.add('is-success');
           clearError();
-          resetCaptcha();
           return;
         }
 
@@ -7619,7 +7548,6 @@ document.addEventListener('DOMContentLoaded', function () {
           showError('Не удалось отправить заявку. Попробуйте ещё раз.');
         }
 
-        resetCaptcha();
       })
       .catch(function () {
         showError('Не удалось отправить заявку. Попробуйте ещё раз.');

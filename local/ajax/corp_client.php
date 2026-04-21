@@ -9,7 +9,6 @@ require $_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/prolog_before.ph
 
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Mail\Mail;
-use Bitrix\Main\Web\HttpClient;
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -56,29 +55,29 @@ function corpClientNormalizePhone(string $phone): string
     return '+7 ('.substr($digits, 1, 3).') '.substr($digits, 4, 3).'-'.substr($digits, 7, 2).'-'.substr($digits, 9, 2);
 }
 
-function corpClientVerifyCaptcha(string $token, string $secret): bool
+function corpClientIsRateLimited(): bool
 {
-    if ($token === '' || $secret === '' || $secret === 'SMARTCAPTCHA_SECRET_KEY') {
+    if (!isset($_SESSION) || !is_array($_SESSION)) {
         return false;
     }
 
-    $httpClient = new HttpClient();
-    $response = $httpClient->post('https://smartcaptcha.yandexcloud.net/validate', [
-        'secret' => $secret,
-        'token' => $token,
-        'ip' => (string)($_SERVER['REMOTE_ADDR'] ?? ''),
-    ]);
-
-    if ($response === false || $response === '') {
+    $ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+    if ($ip === '') {
         return false;
     }
 
-    $decoded = json_decode($response, true);
-    if (!is_array($decoded)) {
-        return false;
+    $sessionKey = 'corp_client_last_submit_'.md5($ip);
+    $currentTime = time();
+    $minInterval = 10;
+    $lastSubmitTime = (int)($_SESSION[$sessionKey] ?? 0);
+
+    if ($lastSubmitTime > 0 && ($currentTime - $lastSubmitTime) < $minInterval) {
+        return true;
     }
 
-    return isset($decoded['status']) && $decoded['status'] === 'ok';
+    $_SESSION[$sessionKey] = $currentTime;
+
+    return false;
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -106,7 +105,6 @@ $name = trim((string)($_POST['name'] ?? ''));
 $phone = trim((string)($_POST['phone'] ?? ''));
 $email = trim((string)($_POST['email'] ?? ''));
 $consent = (string)($_POST['consent'] ?? '');
-$captchaToken = trim((string)($_POST['smartcaptcha_token'] ?? ''));
 $sourceTitle = trim((string)($_POST['source_title'] ?? 'Стать клиентом'));
 $sourcePage = trim((string)($_POST['source_page'] ?? '/for-corporations/'));
 
@@ -143,18 +141,17 @@ if ($consent !== 'Y') {
     ]);
 }
 
+if (corpClientIsRateLimited()) {
+    corpClientJsonResponse([
+        'success' => false,
+        'error' => 'Слишком много попыток отправки. Попробуйте через несколько секунд.',
+    ]);
+}
+
 $config = corpClientLoadConfig();
-$captchaSecret = trim((string)($config['SMARTCAPTCHA_SECRET_KEY'] ?? ''));
 $iblockId = (int)($config['IBLOCK_ID'] ?? 22);
 if ($iblockId <= 0) {
     $iblockId = 22;
-}
-
-if (!corpClientVerifyCaptcha($captchaToken, $captchaSecret)) {
-    corpClientJsonResponse([
-        'success' => false,
-        'error' => 'Не удалось пройти проверку капчи.',
-    ]);
 }
 
 if (!\CModule::IncludeModule('iblock')) {
