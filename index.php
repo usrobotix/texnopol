@@ -61,7 +61,7 @@ $APPLICATION->SetTitle("Корпоративным клиентам");
                     <!-- скрытые поля -->
                     <input type="hidden" name="source_title" value="Стать клиентом">
                     <input type="hidden" name="source_page" value="/for-corporations/">
-                    <div class="corp-client-honeypot" aria-hidden="true">
+                    <div class="corp-client-honeypot" aria-hidden="true" role="presentation">
                         <input type="text" name="honeypot" tabindex="-1" autocomplete="off" aria-hidden="true">
                     </div>
                     <!-- кнопка -->

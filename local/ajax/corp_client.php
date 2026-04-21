@@ -55,18 +55,19 @@ function corpClientNormalizePhone(string $phone): string
     return '+7 ('.substr($digits, 1, 3).') '.substr($digits, 4, 3).'-'.substr($digits, 7, 2).'-'.substr($digits, 9, 2);
 }
 
+function corpClientRateLimitSessionKey(): string
+{
+    $ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+    return 'corp_client_last_submit_'.preg_replace('/[^a-zA-Z0-9]/', '_', $ip);
+}
+
 function corpClientIsRateLimited(int $minInterval = 10): bool
 {
     if (!isset($_SESSION) || !is_array($_SESSION)) {
         return false;
     }
 
-    $ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
-    if ($ip === '') {
-        return false;
-    }
-
-    $sessionKey = 'corp_client_last_submit_'.preg_replace('/[^a-zA-Z0-9]/', '_', $ip);
+    $sessionKey = corpClientRateLimitSessionKey();
     $currentTime = time();
     $lastSubmitTime = (int)($_SESSION[$sessionKey] ?? 0);
 
@@ -74,9 +75,16 @@ function corpClientIsRateLimited(int $minInterval = 10): bool
         return true;
     }
 
-    $_SESSION[$sessionKey] = $currentTime;
-
     return false;
+}
+
+function corpClientMarkRateLimitSubmission(): void
+{
+    if (!isset($_SESSION) || !is_array($_SESSION)) {
+        return;
+    }
+
+    $_SESSION[corpClientRateLimitSessionKey()] = time();
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -227,6 +235,8 @@ if (!$ownerMailSent || !$userMailSent) {
         'error' => 'Заявка сохранена, но не удалось отправить email. Пожалуйста, свяжитесь с нами по телефону.',
     ]);
 }
+
+corpClientMarkRateLimitSubmission();
 
 corpClientJsonResponse([
     'success' => true,
