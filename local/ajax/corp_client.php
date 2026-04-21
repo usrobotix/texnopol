@@ -9,7 +9,6 @@ require $_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/prolog_before.ph
 
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Mail\Mail;
-use Bitrix\Main\Web\HttpClient;
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -56,31 +55,6 @@ function corpClientNormalizePhone(string $phone): string
     return '+7 ('.substr($digits, 1, 3).') '.substr($digits, 4, 3).'-'.substr($digits, 7, 2).'-'.substr($digits, 9, 2);
 }
 
-function corpClientVerifyCaptcha(string $token, string $secret): bool
-{
-    if ($token === '' || $secret === '' || $secret === 'SMARTCAPTCHA_SECRET_KEY') {
-        return false;
-    }
-
-    $httpClient = new HttpClient();
-    $response = $httpClient->post('https://smartcaptcha.yandexcloud.net/validate', [
-        'secret' => $secret,
-        'token' => $token,
-        'ip' => (string)($_SERVER['REMOTE_ADDR'] ?? ''),
-    ]);
-
-    if ($response === false || $response === '') {
-        return false;
-    }
-
-    $decoded = json_decode($response, true);
-    if (!is_array($decoded)) {
-        return false;
-    }
-
-    return isset($decoded['status']) && $decoded['status'] === 'ok';
-}
-
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     corpClientJsonResponse([
         'success' => false,
@@ -106,7 +80,6 @@ $name = trim((string)($_POST['name'] ?? ''));
 $phone = trim((string)($_POST['phone'] ?? ''));
 $email = trim((string)($_POST['email'] ?? ''));
 $consent = (string)($_POST['consent'] ?? '');
-$captchaToken = trim((string)($_POST['smartcaptcha_token'] ?? ''));
 $sourceTitle = trim((string)($_POST['source_title'] ?? 'Стать клиентом'));
 $sourcePage = trim((string)($_POST['source_page'] ?? '/for-corporations/'));
 
@@ -144,17 +117,9 @@ if ($consent !== 'Y') {
 }
 
 $config = corpClientLoadConfig();
-$captchaSecret = trim((string)($config['SMARTCAPTCHA_SECRET_KEY'] ?? ''));
 $iblockId = (int)($config['IBLOCK_ID'] ?? 22);
 if ($iblockId <= 0) {
     $iblockId = 22;
-}
-
-if (!corpClientVerifyCaptcha($captchaToken, $captchaSecret)) {
-    corpClientJsonResponse([
-        'success' => false,
-        'error' => 'Не удалось пройти проверку капчи.',
-    ]);
 }
 
 if (!\CModule::IncludeModule('iblock')) {
