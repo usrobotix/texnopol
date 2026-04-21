@@ -3,7 +3,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/header.php");
 $APPLICATION->SetTitle("Корпоративным клиентам");
 
 $corpClientFormConfig = [];
-$corpClientFormConfigPath = $_SERVER["DOCUMENT_ROOT"]."/local/php_interface/corp_client_form.php";
+$corpClientFormConfigPath = $_SERVER["DOCUMENT_ROOT"]."/ajax/corp_client_form.php";
 if (file_exists($corpClientFormConfigPath)) {
     $loadedCorpClientFormConfig = include $corpClientFormConfigPath;
     if (is_array($loadedCorpClientFormConfig)) {
@@ -19,7 +19,7 @@ $isSmartCaptchaEnabled = $smartCaptchaSiteKey !== "" && $smartCaptchaSiteKey !==
     <!-- Основной контейнер -->
     <div class="content-container info-page-container mb-48-px mb-lg-64-px" >
         <!-- Левая секция (3/4) -->
-        <div class="cards_corp info-page-card article mb-16-px" style="flex: 3 1 70%;">
+        <div class="cards_corp  info-page-card article mb-16-px" >
             <div style="margin-bottom:48px;">
                 <div class="article-image-bg" style="background-image:url('https://upravdom.com/upload/iblock/8cb/5yz79v5hheinhqjp12d5zitv56gy8778.png');"></div>
                 <p>Сотрудничаем с юридическими лицами, строительными компаниями, дизайн-бюро и другими организациями. Предлагаем оптовые цены, консультации специалистов и удобный формат оформления заказов.</p>
@@ -51,11 +51,11 @@ $isSmartCaptchaEnabled = $smartCaptchaSiteKey !== "" && $smartCaptchaSiteKey !==
         </div>
 
         <!-- Правая секция (1/4) — форма -->
-        <div style="flex: 1 1 25%;">
+        <div class="corp-form-col">
             <div class="feedback-card" >
                 <div style="font-weight:600; font-size:30px; line-height:34px; margin-bottom:12px;">Стать клиентом</div>
                 <div style="margin-bottom:24px;">Отправьте заявку и мы свяжемся с вами в ближайшее время</div>
-                <form class="feedback-card-form js-corp-client-form" method="POST" action="/local/ajax/corp_client.php">
+                <form class="feedback-card-form js-corp-client-form" method="POST" action="/ajax/corp_client.php">
                     <?=bitrix_sessid_post();?>
                     <div class="js-corp-client-fields">
                     <div style="margin-bottom:16px;">
@@ -75,6 +75,7 @@ $isSmartCaptchaEnabled = $smartCaptchaSiteKey !== "" && $smartCaptchaSiteKey !==
                     <input type="hidden" name="source_page" value="/for-corporations/">
                     <!-- honeypot -->
                     <input type="text" name="honeypot" style="display:none;">
+                    <div   style="height: 100px"   id="captcha-container"   class="smart-captcha"   data-sitekey="ysc1_UuA79e7Z6uQB1SNrKKEs91Kf9psr4zEmgor5RSwp6f4b781e"></div>
                     <div class="feedback-card-form__captcha" style="margin-bottom:16px;">
                         <div id="corp-client-smartcaptcha"></div>
                         <input type="hidden" name="smartcaptcha_token" value="">
@@ -96,6 +97,17 @@ $isSmartCaptchaEnabled = $smartCaptchaSiteKey !== "" && $smartCaptchaSiteKey !==
     </div>
 </div>
 <style>
+    /* 1) контейнер, которому скрипт ставит height:102px */
+#corp-client-smartcaptcha.smart-captcha{
+  height: auto !important;     /* игнорируем inline height */
+  min-height: 502px;           /* чтобы чекбокс не схлопывался */
+}
+
+/* 2) iframe чекбокса и backend – не держим в 100% от 102px */
+#corp-client-smartcaptcha.smart-captcha iframe{
+  height: 540px !important;    /* подберите: 140/150/160 */
+  max-height: none !important;
+}
     :root {
   --primary-color: #ffe63f;
   --primary-color-hover: #FFE63FBF;
@@ -7110,21 +7122,47 @@ margin-top: 16px;
     height: 24px;
     width: 24px;
     min-width: 24px;
-    visibility: hidden;
+    visibility: visible;  /* просто уберите/переопределите visibility:hidden */
     margin: 0;
 }
 .checkbox-control input[type=checkbox]:not(.checkbox-input-colored):before {
     background-color: var(--foreground-color);
 }
+.checkbox-control input[type=checkbox]:checked:not(.checkbox-input-colored):before {
+    background-color: var(--primary-color);
+}
+.checkbox-control input[type=checkbox]:checked:after {
+    visibility: visible;
+    content: "";
+    background-image: url(data:image/svg+xml,%3csvg%20width='12'%20height='10'%20viewBox='0%200%2012%2010'%20fill='none'%20xmlns='http://www.w3.org/2000/svg'%3e%3cpath%20d='M10.7992%201.40039L3.6397%208.60039L1.19922%206.14611'%20stroke='%23212121'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'/%3e%3c/svg%3e);
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: cover;
+    position: absolute;
+    width: 12px;
+    height: 10px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
 .feedback-card {
     border-radius: 45px;
     position:relative; 
-    overflow:hidden; 
+    overflow: visible;
     padding:32px; 
     border-radius:8px; 
     box-shadow:0 4px 16px rgba(0,0,0,0.1); 
     background:#fff;
 
+}
+.corp-form-col{
+  flex: 0 0 25%;
+  max-width: 25%;
+  min-width: 320px; /* чтобы влезала капча */
+}
+.cards_corp {
+  flex: 1 1 0;
+  min-width: 0;
 }
 .checkbox-control input[type=checkbox]:before {
     visibility: visible;
@@ -7388,7 +7426,15 @@ table.article-table td:last-of-type {
   display: flex;
   flex-direction: column;
 }
+.smartcaptcha-wrap{
+  width: 100%;
+  max-width: 100%;
+  overflow: visible;
+}
 
+.smartcaptcha-wrap > *{
+  max-width: 100%;
+}
 .drawer .drawer-content.drawer-content-full-width {
   width: 100%;
 }
